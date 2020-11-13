@@ -3,20 +3,34 @@ module Main exposing (..)
 import Array exposing (..)
 
 
-type alias BFModel =
+type alias BFMachine =
     { script : Array Char
     , position : Int
     , pointer : Int
     , buffer : Array Int
-    , stdout : Array Char
-    , stdin : Array Char
+    , stdout : Array Int
+    , stdin : Array Int
     , stack : Array ( Int, Int )
+    , waiting : Bool
+    }
+
+
+createMachine : BFMachine
+createMachine =
+    { script = initialize 0 (\_ -> ' ')
+    , position = 0
+    , pointer = 0
+    , buffer = initialize 300000 (\_ -> 0)
+    , stdout = initialize 0 (\_ -> 0)
+    , stdin = initialize 0 (\_ -> 0)
+    , stack = initialize 0 (\_ -> ( 0, 0 ))
+    , waiting = False
     }
 
 
 {-| Debug format - eventually add runlengths for optimizing BF scripts
 -}
-type BFCommand
+type BFOP
     = IncrPtr
     | DecrPtr
     | IncrByte
@@ -27,7 +41,7 @@ type BFCommand
     | EndBlock
 
 
-decodeChar : Char -> Maybe BFCommand
+decodeChar : Char -> Maybe BFOP
 decodeChar char =
     case char of
         '>' ->
@@ -65,16 +79,16 @@ parseScript script =
         |> fromList
 
 
-goToNextCommand : BFModel -> BFModel
-goToNextCommand model =
-    { model | position = model.position + 1 }
+goToNextCommand : BFMachine -> BFMachine
+goToNextCommand machine =
+    { machine | position = machine.position + 1 }
 
 
-processCurrentCommand : BFModel -> BFModel
-processCurrentCommand model =
+processCurrentCommand : BFMachine -> BFMachine
+processCurrentCommand machine =
     let
         currentCmd =
-            get model.position model.script
+            get machine.position machine.script
                 |> Maybe.withDefault 'x'
                 |> decodeChar
     in
@@ -82,41 +96,75 @@ processCurrentCommand model =
         Just cmd ->
             let
                 currentByte =
-                    get model.pointer model.buffer
+                    get machine.pointer machine.buffer
                         |> Maybe.withDefault 0
             in
             case cmd of
                 IncrPtr ->
-                    { model | pointer = model.pointer + 1 }
+                    { machine | pointer = machine.pointer + 1 }
 
                 DecrPtr ->
-                    { model | pointer = model.pointer - 1 }
+                    { machine | pointer = machine.pointer - 1 }
 
                 IncrByte ->
-                    { model | buffer = set model.pointer (currentByte + 1) model.buffer }
+                    { machine | buffer = set machine.pointer (currentByte + 1) machine.buffer }
 
                 DecrByte ->
-                    { model | buffer = set model.pointer (currentByte - 1) model.buffer }
+                    { machine | buffer = set machine.pointer (currentByte - 1) machine.buffer }
 
                 Write ->
-                    { model | stdout = push (Char.fromCode currentByte) model.stdout }
+                    { machine | stdout = push currentByte machine.stdout }
 
                 Read ->
-                    let
-                        readByte =
-                            'x'
-                                |> Char.toCode
+                    if length machine.stdin > 0 then
+                        let
+                            readByte =
+                                get 0 machine.stdin
+                                    |> Maybe.withDefault 0
 
-                        newStdin =
-                            slice 1 0 model.stdin
-                    in
-                    { model
-                        | stdin = newStdin
-                        , buffer = set model.pointer readByte model.buffer
-                    }
+                            newStdin =
+                                slice 1 0 machine.stdin
+                        in
+                        { machine
+                            | stdin = newStdin
+                            , buffer = set machine.pointer readByte machine.buffer
+                            , waiting = False
+                        }
+
+                    else
+                        { machine
+                            | waiting = True
+                        }
 
                 _ ->
-                    model
+                    machine
 
         Nothing ->
-            model
+            machine
+
+
+cycle : BFMachine -> BFMachine
+cycle machine =
+    case machine.waiting of
+        True ->
+            if length machine.stdin > 0 then
+                let
+                    newMachine =
+                        processCurrentCommand machine
+                in
+                { newMachine | position = newMachine.position + 1 }
+
+            else
+                machine
+
+        False ->
+            let
+                newMachine =
+                    processCurrentCommand machine
+            in
+            { newMachine | position = newMachine.position + 1 }
+
+
+flush : BFMachine -> Array Char
+flush machine =
+    map Char.fromCode machine.stdout
