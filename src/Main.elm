@@ -168,3 +168,41 @@ cycle machine =
 flush : BFMachine -> Array Char
 flush machine =
     map Char.fromCode machine.stdout
+
+
+closingBracketForOpeningBracket : Array Char -> Int -> Result String Int
+closingBracketForOpeningBracket script position =
+    closingBracketLocatorIterator script position 1
+
+
+closingBracketLocatorIterator script position offset =
+    let
+        currentPosition =
+            position + offset
+    in
+    if currentPosition >= length script then
+        Err "Exceeded script length without locating closing bracket"
+
+    else
+        case get currentPosition script of
+            Just '[' ->
+                let
+                    closingPosition =
+                        closingBracketLocatorIterator script currentPosition 1
+                in
+                case closingPosition of
+                    Ok value ->
+                        let
+                            newOffset =
+                                value - position + 1
+                        in
+                        closingBracketLocatorIterator script position newOffset
+
+                    Err e ->
+                        Err e
+
+            Just ']' ->
+                Ok currentPosition
+
+            _ ->
+                closingBracketLocatorIterator script position (offset + 1)
