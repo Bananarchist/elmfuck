@@ -136,15 +136,46 @@ processCurrentCommand machine =
                             | waiting = True
                         }
 
-                _ ->
-                    machine
+                StartBlock ->
+                    let
+                        endPos =
+                            case closingBracketForOpeningBracket machine.script machine.position of
+                                Ok position ->
+                                    position
+
+                                Err error ->
+                                    machine.position
+
+                        newStack =
+                            push ( machine.position, endPos ) machine.stack
+                    in
+                    if currentByte == 0 then
+                        { machine | position = endPos }
+
+                    else
+                        { machine | stack = newStack }
+
+                EndBlock ->
+                    let
+                        remainingStack =
+                            slice 0 -1 machine.stack
+
+                        unresolved =
+                            get (length remainingStack) machine.stack
+                                |> Maybe.withDefault ( 0, 0 )
+                    in
+                    if currentByte == 0 then
+                        { machine | stack = remainingStack }
+
+                    else
+                        { machine | position = Tuple.second unresolved }
 
         Nothing ->
             machine
 
 
-cycle : BFMachine -> BFMachine
-cycle machine =
+step : BFMachine -> BFMachine
+step machine =
     case machine.waiting of
         True ->
             if length machine.stdin > 0 then
@@ -175,6 +206,7 @@ closingBracketForOpeningBracket script position =
     closingBracketLocatorIterator script position 1
 
 
+closingBracketLocatorIterator : Array Char -> Int -> Int -> Result String Int
 closingBracketLocatorIterator script position offset =
     let
         currentPosition =
