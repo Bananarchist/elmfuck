@@ -9,7 +9,7 @@ import Test exposing (..)
 suite : Test
 suite =
     describe "Test Bf Interp"
-        [ describe "machine.cycle"
+        [ describe "machine.step"
             [ test "when waiting, stops advancing position until stdin is consumable" <|
                 \_ ->
                     let
@@ -17,13 +17,13 @@ suite =
                             BF.createMachine
 
                         machine =
-                            BF.cycle { baseMachine | script = Array.fromList [ ',' ] }
+                            BF.step { baseMachine | script = Array.fromList [ ',' ] }
 
                         machine2 =
-                            BF.cycle { machine | stdin = Array.fromList [ 9 ] }
+                            BF.step { machine | stdin = Array.fromList [ 9 ] }
                     in
                     baseMachine
-                        |> BF.cycle
+                        |> BF.step
                         |> .position
                         |> Expect.equal 1
             ]
