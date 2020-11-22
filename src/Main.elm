@@ -1,6 +1,7 @@
 module Main exposing (..)
 
 import Array exposing (..)
+import Stack as Stack
 
 
 type alias BFMachine =
@@ -10,7 +11,7 @@ type alias BFMachine =
     , buffer : Array Int
     , stdout : Array Int
     , stdin : Array Int
-    , stack : Array ( Int, Int )
+    , stack : Stack.Stack ( Int, Int )
     , waiting : Bool
     }
 
@@ -23,8 +24,15 @@ createMachine =
     , buffer = initialize 300000 (\_ -> 0)
     , stdout = initialize 0 (\_ -> 0)
     , stdin = initialize 0 (\_ -> 0)
-    , stack = initialize 0 (\_ -> ( 0, 0 ))
+    , stack = []
     , waiting = False
+    }
+
+
+initMachine : String -> BFMachine
+initMachine script =
+    { createMachine
+        | script = parseScript script
     }
 
 
@@ -147,7 +155,7 @@ processCurrentCommand machine =
                                     machine.position
 
                         newStack =
-                            push ( machine.position, endPos ) machine.stack
+                            Stack.push machine.stack ( machine.position, endPos )
                     in
                     if currentByte == 0 then
                         { machine | position = endPos }
@@ -158,11 +166,11 @@ processCurrentCommand machine =
                 EndBlock ->
                     let
                         remainingStack =
-                            slice 0 -1 machine.stack
+                            Stack.popped machine.stack
 
                         unresolved =
-                            get (length remainingStack) machine.stack
-                                |> Maybe.withDefault ( 0, 0 )
+                            Stack.pop machine.stack
+                                |> Result.withDefault ( 0, 0 )
                     in
                     if currentByte == 0 then
                         { machine | stack = remainingStack }
