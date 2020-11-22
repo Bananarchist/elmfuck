@@ -1,6 +1,7 @@
 module Main exposing (..)
 
 import Array exposing (..)
+import Queue as Q
 import Stack as Stack
 
 
@@ -10,7 +11,7 @@ type alias BFMachine =
     , pointer : Int
     , buffer : Array Int
     , stdout : Array Int
-    , stdin : Array Int
+    , stdin : Q.Queue Int
     , stack : Stack.Stack ( Int, Int )
     , waiting : Bool
     }
@@ -23,7 +24,7 @@ createMachine =
     , pointer = 0
     , buffer = initialize 300000 (\_ -> 0)
     , stdout = initialize 0 (\_ -> 0)
-    , stdin = initialize 0 (\_ -> 0)
+    , stdin = []
     , stack = []
     , waiting = False
     }
@@ -124,14 +125,14 @@ processCurrentCommand machine =
                     { machine | stdout = push currentByte machine.stdout }
 
                 Read ->
-                    if length machine.stdin > 0 then
+                    if Q.enqueued machine.stdin then
                         let
                             readByte =
-                                get 0 machine.stdin
+                                Q.dequeue machine.stdin
                                     |> Maybe.withDefault 0
 
                             newStdin =
-                                slice 1 0 machine.stdin
+                                Q.dequeued machine.stdin
                         in
                         { machine
                             | stdin = newStdin
@@ -186,7 +187,7 @@ step : BFMachine -> BFMachine
 step machine =
     case machine.waiting of
         True ->
-            if length machine.stdin > 0 then
+            if Q.enqueued machine.stdin then
                 let
                     newMachine =
                         processCurrentCommand machine

@@ -20,7 +20,7 @@ suite =
                             BF.step { baseMachine | script = Array.fromList [ ',' ] }
 
                         machine2 =
-                            BF.step { machine | stdin = Array.fromList [ 9 ] }
+                            BF.step { machine | stdin = [ 9 ] }
                     in
                     baseMachine
                         |> BF.step
