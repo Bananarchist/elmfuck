@@ -1,8 +1,8 @@
 module HelloWorld exposing (suite)
 
 import Array as Array
+import Brainfuck as BF
 import Expect exposing (Expectation)
-import Main as BF
 import Test exposing (..)
 
 
