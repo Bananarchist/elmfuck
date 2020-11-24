@@ -23,9 +23,9 @@ createMachine =
     , position = 0
     , pointer = 0
     , buffer = initialize 300000 (\_ -> 0)
-    , stdout = initialize 0 (\_ -> 0)
+    , stdout = fromList []
     , stdin = []
-    , stack = []
+    , stack = fromList []
     , waiting = False
     }
 
@@ -156,7 +156,7 @@ processCurrentCommand machine =
                                     machine.position
 
                         newStack =
-                            Stack.push machine.stack ( machine.position, endPos )
+                            Stack.push ( machine.position, endPos ) machine.stack
                     in
                     if currentByte == 0 then
                         { machine | position = endPos }

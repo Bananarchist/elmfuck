@@ -1,36 +1,31 @@
 module Stack exposing (Stack, pop, popped, push)
 
+import Array as Array
+
 
 type alias Stack a =
-    List a
+    Array.Array a
 
 
 pop : Stack a -> Result String a
 pop stack =
-    case stack of
-        x :: [] ->
-            Ok x
+    case Array.get -1 stack of
+        Just val ->
+            Ok val
 
-        x :: xs ->
-            pop xs
-
-        _ ->
+        Nothing ->
             Err "Empty stack"
 
 
 popped : Stack a -> Stack a
 popped stack =
-    case stack of
-        x :: [] ->
-            []
+    if Array.isEmpty stack then
+        stack
 
-        x :: xs ->
-            x :: popped xs
-
-        [] ->
-            []
+    else
+        Array.slice 0 -1 stack
 
 
-push : Stack a -> a -> Stack a
-push stack element =
-    List.append stack [ element ]
+push : a -> Stack a -> Stack a
+push =
+    Array.push
