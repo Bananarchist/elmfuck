@@ -5,6 +5,12 @@ import Queue as Q
 import Stack as Stack
 
 
+type Flag
+    = Waiting
+    | Error String
+    | Done
+
+
 type alias BFMachine =
     { script : Array Char
     , position : Int
@@ -14,6 +20,7 @@ type alias BFMachine =
     , stdin : Q.Queue Int
     , stack : Stack.Stack ( Int, Int )
     , waiting : Bool
+    , flag : Maybe Flag
     }
 
 
@@ -27,6 +34,7 @@ createMachine =
     , stdin = []
     , stack = fromList []
     , waiting = False
+    , flag = Nothing
     }
 
 
@@ -137,12 +145,12 @@ processCurrentCommand machine =
                         { machine
                             | stdin = newStdin
                             , buffer = set machine.pointer readByte machine.buffer
-                            , waiting = False
+                            , flag = Nothing
                         }
 
                     else
                         { machine
-                            | waiting = True
+                            | flag = Just Waiting
                         }
 
                 StartBlock ->
@@ -185,8 +193,8 @@ processCurrentCommand machine =
 
 step : BFMachine -> BFMachine
 step machine =
-    case machine.waiting of
-        True ->
+    case machine.flag of
+        Just Waiting ->
             if Q.enqueued machine.stdin then
                 let
                     newMachine =
@@ -197,12 +205,15 @@ step machine =
             else
                 machine
 
-        False ->
+        Nothing ->
             let
                 newMachine =
                     processCurrentCommand machine
             in
             { newMachine | position = newMachine.position + 1 }
+
+        _ ->
+            machine
 
 
 flush : BFMachine -> Array Char
