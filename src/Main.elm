@@ -25,7 +25,7 @@ type alias Model =
 
 
 type Msg
-    = Input
+    = UpdateScript String
     | Run
     | Stop
     | Cycle
@@ -59,12 +59,22 @@ update msg model =
             )
 
         Cycle ->
-            ( { model | machine = BF.step model.machine }
+            let
+                machine =
+                    if model.running then
+                        BF.step model.machine
+
+                    else
+                        model.machine
+            in
+            ( { model | machine = machine }
             , Cmd.none
             )
 
-        _ ->
-            ( model, Cmd.none )
+        UpdateScript s ->
+            ( { model | script = s }
+            , Cmd.none
+            )
 
 
 view : Model -> Html Msg
@@ -84,11 +94,10 @@ view model =
             else
                 "Run"
     in
-    div []
-        [ textarea [] []
+    main_ []
+        [ textarea [ Hevs.onInput UpdateScript ] [ text model.script ]
         , button runAttrs [ text runText ]
-        , code [] [ text model.console ]
-        , input [] []
+        , code [ Hats.contenteditable True ] [ text model.console ]
         ]
 
 
