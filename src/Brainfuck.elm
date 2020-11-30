@@ -5,7 +5,7 @@ import Queue as Q
 import Stack as Stack
 
 
-type Flag
+type State
     = Waiting
     | Error String
     | Done
@@ -19,8 +19,7 @@ type alias BFMachine =
     , stdout : Array Int
     , stdin : Q.Queue Int
     , stack : Stack.Stack ( Int, Int )
-    , waiting : Bool
-    , flag : Maybe Flag
+    , status : Maybe State
     }
 
 
@@ -33,8 +32,7 @@ createMachine =
     , stdout = fromList []
     , stdin = []
     , stack = fromList []
-    , waiting = False
-    , flag = Nothing
+    , status = Nothing
     }
 
 
@@ -145,12 +143,12 @@ processCurrentCommand machine =
                         { machine
                             | stdin = newStdin
                             , buffer = set machine.pointer readByte machine.buffer
-                            , flag = Nothing
+                            , status = Nothing
                         }
 
                     else
                         { machine
-                            | flag = Just Waiting
+                            | status = Just Waiting
                         }
 
                 StartBlock ->
@@ -193,7 +191,7 @@ processCurrentCommand machine =
 
 step : BFMachine -> BFMachine
 step machine =
-    case machine.flag of
+    case machine.status of
         Just Waiting ->
             if Q.enqueued machine.stdin then
                 let
