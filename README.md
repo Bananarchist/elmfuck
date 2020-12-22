@@ -1,11 +1,5 @@
 # brainfuck in Elm
-Never written an interpretor before, thought I'd give it a try
-
-Gave up after getting the interpretor working and then realizing I had to
-optimize it and then spending several days working on that and then deciding
-life is to short for boring personal projects
-
-If you want to pay me to finish it, send me a message
+Got stuck on parsing for a while now I'm maybe going to finish it because I figured out how parsers work but there are probably improvements to be made along the way
 
 ## To do
 * Web UX
