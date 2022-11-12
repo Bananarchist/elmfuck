@@ -1,258 +1,244 @@
 module Brainfuck exposing (..)
 
 import Array exposing (..)
-import Queue as Q
+import BFParser as Parser
 import Stack as Stack
 
 
+type alias ScriptPosition =
+    Int
+
+
+type alias BufferPointer =
+    Int
+
+
+type alias CodeLabel =
+    String
+
+
+updateBufferAtPointer : (Int -> Int) -> BFMachine -> BFMachine
+updateBufferAtPointer predicate state =
+    { state
+        | buffer =
+            Array.set
+                state.pointer
+                (Array.get state.pointer state.buffer |> Maybe.map predicate |> Maybe.withDefault 0)
+                state.buffer
+    }
+
+
+set : Int -> BFMachine -> BFMachine
+set x =
+    updateBufferAtPointer (always x)
+
+
+input : BFMachine -> Char -> BFMachine
+input machine char =
+    set (Char.toCode char) machine
+        |> processed Parser.Read
+
+
+bufferLength : Int
+bufferLength =
+    500
+
+
 type State
-    = Waiting
-    | Error String
-    | Done
+    = Running
+    | Stdin
+    | Stdout Char
+    | Complete (Result String ())
+
+
+type alias Script =
+    List Parser.BFOP
+
+
+type alias Processed =
+    List Parser.BFOP
 
 
 type alias BFMachine =
-    { script : Array Char
-    , position : Int
+    { script : Script
+    , processed : Processed
     , pointer : Int
     , buffer : Array Int
-    , stdout : Array Int
-    , stdin : Q.Queue Int
-    , stack : Stack.Stack ( Int, Int )
-    , status : Maybe State
+    , stdout : List Char
+    , stack : Stack.Stack ( Processed, Script )
+    , status : State
     }
 
 
 createMachine : BFMachine
 createMachine =
-    { script = initialize 0 (\_ -> ' ')
-    , position = 0
+    { script = []
+    , processed = []
     , pointer = 0
-    , buffer = initialize 300000 (\_ -> 0)
-    , stdout = fromList []
-    , stdin = []
-    , stack = fromList []
-    , status = Nothing
+    , buffer = initialize bufferLength (\_ -> 0)
+    , stdout = []
+    , stack = []
+    , status = Running
     }
 
 
 initMachine : String -> BFMachine
 initMachine script =
-    { createMachine
-        | script = parseScript script
+    case Parser.parse script of
+        Ok parsedScript ->
+            { createMachine | script = parsedScript }
+
+        Err e ->
+            { createMachine | status = Complete (Err e) }
+
+
+runMachine : BFMachine -> BFMachine
+runMachine machine =
+    processCurrentCommand machine
+
+
+movePointer : Int -> BFMachine -> BFMachine
+movePointer to machine =
+    let
+        newPtr =
+            machine.pointer + to
+    in
+    if newPtr >= bufferLength then
+        { machine
+            | status =
+                [ "Max buffer length"
+                , String.fromInt bufferLength
+                , "exceeded, pointer forwarded to"
+                , String.fromInt newPtr
+                ]
+                    |> String.join " "
+                    |> Err
+                    |> Complete
+        }
+
+    else
+        { machine | pointer = newPtr }
+
+
+printCurrentCharacter : BFMachine -> BFMachine
+printCurrentCharacter machine =
+    case get machine.pointer machine.buffer of
+        Just x ->
+            { machine
+                | stdout =
+                    Char.fromCode x
+                        |> List.singleton
+                        |> (++) machine.stdout
+            }
+
+        Nothing ->
+            { machine
+                | status =
+                    [ "Couldn't read buffer at position "
+                    , String.fromInt machine.pointer
+                    ]
+                        |> String.join " "
+                        |> Err
+                        |> Complete
+            }
+
+
+updateScript : List Parser.BFOP -> BFMachine -> BFMachine
+updateScript ops machine =
+    { machine | script = ops }
+
+
+pushReturnStack : List Parser.BFOP -> BFMachine -> BFMachine
+pushReturnStack returnOps machine =
+    { machine
+        | stack = Stack.push ( machine.processed, returnOps ) machine.stack
+        , processed = []
     }
 
 
-{-| Debug format - eventually add runlengths for optimizing BF scripts
--}
-type BFOP
-    = IncrPtr
-    | DecrPtr
-    | IncrByte
-    | DecrByte
-    | Write
-    | Read
-    | StartBlock
-    | EndBlock
+returnStack : BFMachine -> BFMachine
+returnStack machine =
+    Stack.peak machine.stack
+        |> Result.map
+            (\( proc, scr ) ->
+                if get machine.pointer machine.buffer == Just 0 then
+                    { machine
+                        | stack = Stack.pop machine.stack
+                        , script = scr
+                        , processed = machine.processed |> Parser.Block |> List.singleton |> (++) proc
+                    }
+
+                else
+                    { machine
+                        | script = machine.processed
+                        , processed = []
+                    }
+                        |> Debug.log "go back to loop beginning"
+            )
+        |> Result.withDefault { machine | status = Complete (Ok ()) }
 
 
-decodeChar : Char -> Maybe BFOP
-decodeChar char =
-    case char of
-        '>' ->
-            Just IncrPtr
+running : BFMachine -> BFMachine
+running machine =
+    { machine | status = Running }
 
-        '<' ->
-            Just DecrPtr
 
-        '+' ->
-            Just IncrByte
+processed : Parser.BFOP -> BFMachine -> BFMachine
+processed op machine =
+    { machine | processed = op |> List.singleton |> (++) machine.processed }
 
-        '-' ->
-            Just DecrByte
 
-        '.' ->
-            Just Write
-
-        ',' ->
-            Just Read
-
-        '[' ->
-            Just StartBlock
-
-        ']' ->
-            Just EndBlock
+mapIncomplete : (BFMachine -> BFMachine) -> BFMachine -> BFMachine
+mapIncomplete fn machine =
+    case machine.status of
+        Complete _ ->
+            machine
 
         _ ->
-            Nothing
-
-
-parseScript : String -> Array Char
-parseScript script =
-    script
-        |> String.toList
-        |> fromList
-
-
-goToNextCommand : BFMachine -> BFMachine
-goToNextCommand machine =
-    { machine | position = machine.position + 1 }
+            fn machine
 
 
 processCurrentCommand : BFMachine -> BFMachine
 processCurrentCommand machine =
-    let
-        currentCmd =
-            get machine.position machine.script
-                |> Maybe.withDefault 'x'
-                |> decodeChar
-    in
-    case currentCmd of
-        Just cmd ->
-            let
-                currentByte =
-                    get machine.pointer machine.buffer
-                        |> Maybe.withDefault 0
-            in
-            case cmd of
-                IncrPtr ->
-                    { machine | pointer = machine.pointer + 1 }
-
-                DecrPtr ->
-                    { machine | pointer = machine.pointer - 1 }
-
-                IncrByte ->
-                    { machine | buffer = set machine.pointer (currentByte + 1) machine.buffer }
-
-                DecrByte ->
-                    { machine | buffer = set machine.pointer (currentByte - 1) machine.buffer }
-
-                Write ->
-                    { machine | stdout = push currentByte machine.stdout }
-
-                Read ->
-                    if Q.enqueued machine.stdin then
-                        let
-                            readByte =
-                                Q.dequeue machine.stdin
-                                    |> Maybe.withDefault 0
-
-                            newStdin =
-                                Q.dequeued machine.stdin
-                        in
-                        { machine
-                            | stdin = newStdin
-                            , buffer = set machine.pointer readByte machine.buffer
-                            , status = Nothing
-                        }
-
-                    else
-                        { machine
-                            | status = Just Waiting
-                        }
-
-                StartBlock ->
-                    let
-                        endPos =
-                            case closingBracketForOpeningBracket machine.script machine.position of
-                                Ok position ->
-                                    position
-
-                                Err error ->
-                                    machine.position
-
-                        newStack =
-                            Stack.push ( machine.position, endPos ) machine.stack
-                    in
-                    if currentByte == 0 then
-                        { machine | position = endPos }
-
-                    else
-                        { machine | stack = newStack }
-
-                EndBlock ->
-                    let
-                        remainingStack =
-                            Stack.popped machine.stack
-
-                        unresolved =
-                            Stack.pop machine.stack
-                                |> Result.withDefault ( 0, 0 )
-                    in
-                    if currentByte == 0 then
-                        { machine | stack = remainingStack }
-
-                    else
-                        { machine | position = Tuple.second unresolved }
-
-        Nothing ->
+    case machine.script of
+        [] ->
             machine
+                |> returnStack
+                |> mapIncomplete processCurrentCommand
 
-
-step : BFMachine -> BFMachine
-step machine =
-    case machine.status of
-        Just Waiting ->
-            if Q.enqueued machine.stdin then
-                let
-                    newMachine =
-                        processCurrentCommand machine
-                in
-                { newMachine | position = newMachine.position + 1 }
-
-            else
-                machine
-
-        Nothing ->
-            let
-                newMachine =
-                    processCurrentCommand machine
-            in
-            { newMachine | position = newMachine.position + 1 }
-
-        _ ->
+        (Parser.Block block) :: cmds ->
             machine
+                |> updateScript block
+                |> pushReturnStack cmds
+                |> running
+                |> processCurrentCommand
+
+        Parser.Print :: cmds ->
+            printCurrentCharacter machine
+                |> updateScript cmds
+                |> processed Parser.Print
+                |> running
+                |> processCurrentCommand
+
+        (Parser.Byte sum) :: cmds ->
+            updateBufferAtPointer ((+) sum) machine
+                |> updateScript cmds
+                |> processed (Parser.Byte sum)
+                |> running
+                |> processCurrentCommand
+
+        (Parser.Ptr to) :: cmds ->
+            movePointer to machine
+                |> updateScript cmds
+                |> processed (Parser.Ptr to)
+                |> running
+                |> processCurrentCommand
+
+        Parser.Read :: cmds ->
+            { machine | status = Stdin }
+                |> updateScript cmds
 
 
-flush : BFMachine -> Array Char
+flush : BFMachine -> BFMachine
 flush machine =
-    map Char.fromCode machine.stdout
-
-
-closingBracketForOpeningBracket : Array Char -> Int -> Result String Int
-closingBracketForOpeningBracket script position =
-    closingBracketLocatorIterator script position 1
-
-
-closingBracketLocatorIterator : Array Char -> Int -> Int -> Result String Int
-closingBracketLocatorIterator script position offset =
-    let
-        currentPosition =
-            position + offset
-    in
-    if currentPosition >= length script then
-        Err "Exceeded script length without locating closing bracket"
-
-    else
-        case get currentPosition script of
-            Just '[' ->
-                let
-                    closingPosition =
-                        closingBracketLocatorIterator script currentPosition 1
-                in
-                case closingPosition of
-                    Ok value ->
-                        let
-                            newOffset =
-                                value - position + 1
-                        in
-                        closingBracketLocatorIterator script position newOffset
-
-                    Err e ->
-                        Err e
-
-            Just ']' ->
-                Ok currentPosition
-
-            _ ->
-                closingBracketLocatorIterator script position (offset + 1)
+    { machine | stdout = [] }

@@ -1,15 +1,26 @@
-module Stack exposing (Stack, pop, popped, push)
-
-import Array as Array
+module Stack exposing (Stack, map, new, peak, pop, push, toList)
 
 
 type alias Stack a =
-    Array.Array a
+    List a
 
 
-pop : Stack a -> Result String a
-pop stack =
-    case Array.get -1 stack of
+new : Stack a
+new =
+    []
+
+
+map =
+    List.map
+
+
+toList =
+    identity
+
+
+peak : Stack a -> Result String a
+peak stack =
+    case List.head stack of
         Just val ->
             Ok val
 
@@ -17,15 +28,16 @@ pop stack =
             Err "Empty stack"
 
 
-popped : Stack a -> Stack a
-popped stack =
-    if Array.isEmpty stack then
-        stack
+pop : Stack a -> Stack a
+pop stack =
+    case stack of
+        _ :: xs ->
+            xs
 
-    else
-        Array.slice 0 -1 stack
+        _ ->
+            stack
 
 
 push : a -> Stack a -> Stack a
 push =
-    Array.push
+    (::)

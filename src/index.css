@@ -1,0 +1,48 @@
+main {
+  display: flex;
+}
+
+section {
+  flex: 1 0 50%;
+  display: flex;
+  flex-direction: column;
+}
+
+textarea {
+  flex: 1 0 100%;
+  resize: none;
+}
+
+button {
+  padding: 1em 0;
+  margin: 0.25em 0;
+}
+
+p {
+  border: solid 1px;
+  border-radius: 5px;
+	padding: 0.5em 1em;
+	margin: 0 0 0.25em 0.25em;
+}
+
+.error {
+  color: rgba(255, 0, 0, 0.8);
+  background: rgba(255, 0, 40, 0.1);
+}
+
+.success {
+  color: rgba(0, 40, 0, 0.9);
+  background: rgba(200, 255, 200, 0.1);
+}
+.output {
+  color: rgba(0, 0, 40, 0.9);
+  background: rgba(200, 200, 255, 0.1);
+}
+
+.input > *:first-child::before {
+  content: ">";
+}
+
+.input input {
+  border: none;
+}

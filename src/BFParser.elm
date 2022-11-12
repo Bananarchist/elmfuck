@@ -1,4 +1,4 @@
-module BFParser exposing (..)
+module BFParser exposing (BFOP(..), parse)
 
 import Parser as P exposing ((|.), (|=))
 import Regex as R
@@ -53,16 +53,6 @@ block =
         |> P.map Block
 
 
-runLengthHelper : String -> Int -> P.Parser (P.Step Int Int)
-runLengthHelper char state =
-    P.oneOf
-        [ P.succeed (\_ -> P.Loop (state + 1))
-            |= P.symbol char
-        , P.succeed ()
-            |> P.map (\_ -> P.Done state)
-        ]
-
-
 bfop : P.Parser BFOP
 bfop =
     P.oneOf
@@ -84,7 +74,7 @@ parser =
 parserHelper : List BFOP -> P.Parser (P.Step (List BFOP) (List BFOP))
 parserHelper stmts =
     P.oneOf
-        [ P.succeed (\stmt -> P.Loop (stmt :: stmts))
+        [ P.succeed (List.singleton >> (++) stmts >> P.Loop)
             |= bfop
         , P.succeed ()
             |> P.map (\_ -> P.Done stmts)
@@ -109,8 +99,8 @@ type BFOP
     | Block (List BFOP)
 
 
-parse : String -> Result (List P.DeadEnd) (List BFOP)
-parse string =
-    string
-        |> stripComments
-        |> P.run parser
+parse : String -> Result String (List BFOP)
+parse =
+    stripComments
+        >> P.run parser
+        >> Result.mapError P.deadEndsToString
