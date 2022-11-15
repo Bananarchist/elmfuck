@@ -173,7 +173,6 @@ returnStack machine =
                         | script = machine.processed
                         , processed = []
                     }
-                        |> Debug.log "go back to loop beginning"
             )
         |> Result.withDefault { machine | status = Complete (Ok ()) }
 

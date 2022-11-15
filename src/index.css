@@ -1,5 +1,11 @@
+body {
+  margin: 0;
+  padding: 0;
+}
+
 main {
   display: flex;
+  height: 100vh;
 }
 
 section {
@@ -9,7 +15,7 @@ section {
 }
 
 textarea {
-  flex: 1 0 100%;
+  flex: 1 0 50%;
   resize: none;
 }
 
@@ -37,10 +43,6 @@ p {
 .output {
   color: rgba(0, 0, 40, 0.9);
   background: rgba(200, 200, 255, 0.1);
-}
-
-.input > *:first-child::before {
-  content: ">";
 }
 
 .input input {

@@ -3,7 +3,33 @@ module BFParserTests exposing (suite)
 import BFParser as BFP
 import Expect exposing (Expectation)
 import Test exposing (..)
+import Fuzz
 
+bfop : Fuzz.Fuzzer BFP.BFOP
+bfop =
+    Fuzz.oneOf
+        [ Fuzz.map BFP.Byte Fuzz.int
+        , Fuzz.map BFP.Ptr Fuzz.int
+        , Fuzz.constant BFP.Print 
+        , Fuzz.constant BFP.Read
+        ]
+
+bfopBlock : Int -> Fuzz.Fuzzer BFP.BFOP
+bfopBlock depth =
+    let 
+        opts = 
+            if depth <= 0 then
+                [ bfop ]
+            else
+                [ bfop, bfopBlock (depth - 1) ]
+    in
+    Fuzz.map BFP.Block (Fuzz.list (Fuzz.oneOf opts))
+
+
+script : Fuzz.Fuzzer (List BFP.BFOP)
+script =
+    Fuzz.list (Fuzz.oneOf [ bfop, bfopBlock 1 ])
+    
 
 suite : Test
 suite =
